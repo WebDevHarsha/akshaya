@@ -1,3 +1,4 @@
+"use client"
 import { useState } from 'react';
 import Link from 'next/link';
 import { Utensils, Menu, X, Heart, Soup, PersonStanding, Phone, LogIn, UserPlus } from 'lucide-react';

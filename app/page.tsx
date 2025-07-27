@@ -219,7 +219,7 @@ export default function Home() {
               ))}
             </div>
             <p className="text-lg text-gray-700 mb-6 italic">
-              "{testimonials[currentTestimonial].content}"
+              &apos;{testimonials[currentTestimonial].content}&apos;
             </p>
             <div>
               <p className="font-semibold text-gray-900">{testimonials[currentTestimonial].name}</p>
