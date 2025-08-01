@@ -1,5 +1,5 @@
 "use client"
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { 
   Bell, 
   Plus, 
@@ -11,8 +11,6 @@ import {
   Heart,
   Building2,
   Truck,
-  CheckCircle,
-  AlertCircle,
   Calendar,
   Search,
   Filter,
@@ -22,13 +20,10 @@ import {
   LogOut,
   Utensils,
   Eye,
-  Edit,
-  Trash2
 } from 'lucide-react';
 
 export default function Dashboard() {
   const [userRole, setUserRole] = useState<'Restaurant/Hotel' | 'NGO'>('Restaurant/Hotel');
-  const [activeTab, setActiveTab] = useState('overview');
   const [notifications, setNotifications] = useState(5);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -59,8 +54,6 @@ export default function Dashboard() {
       { id: 4, food: 'Curry & Bread', quantity: '40 portions', restaurant: 'Spice Route', status: 'completed', time: '8 hours ago' }
     ]
   };
-
-  const currentData = userRole === 'Restaurant/Hotel' ? restaurantData : ngoData;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -400,7 +393,7 @@ export default function Dashboard() {
 
             {/* Impact Summary */}
             <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white">
-              <h3 className="font-semibold mb-4">This Month's Impact</h3>
+              <h3 className="font-semibold mb-4">This Month&apos;s Impact</h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-green-100">Meals Provided</span>
