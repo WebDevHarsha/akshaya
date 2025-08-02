@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from 'react';
-import Navbar from '@/components/Navbar';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Plus, 
   MapPin, 
@@ -16,9 +15,62 @@ import {
   Utensils,
   Phone,
 } from 'lucide-react';
+import Navbar from '@/components/Navbar';
+
+// Types
+interface FoodItem {
+  id: number;
+  title: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  foodType: 'Vegetarian' | 'Non-Vegetarian' | 'Vegan';
+  expiryTime: string;
+  postedBy: string;
+  location: string;
+  contact: string;
+  status: 'available' | 'claimed' | 'expired';
+  image: string | null;
+  postedAt: string;
+  category: string;
+  coordinates?: [number, number];
+  claimedBy?: string;
+}
+
+interface FormData {
+  title: string;
+  description: string;
+  quantity: string;
+  unit: string;
+  foodType: 'Vegetarian' | 'Non-Vegetarian' | 'Vegan';
+  category: string;
+  expiryTime: string;
+  location: string;
+  contact: string;
+  coordinates: [number, number] | null;
+}
+
+interface Filters {
+  search: string;
+  foodType: string;
+  status: string;
+  category: string;
+}
+
+interface LocationPickerProps {
+  onLocationSelect: (coordinates: [number, number], address: string) => void;
+  initialLocation?: [number, number] | null;
+}
+
+// Extend Window interface for Leaflet
+declare global {
+  interface Window {
+    L: any;
+  }
+}
 
 // Mock data for demonstration
-const mockFoodItems = [
+const mockFoodItems: FoodItem[] = [
   {
     id: 1,
     title: 'Fresh Vegetable Curry & Rice',
@@ -33,7 +85,8 @@ const mockFoodItems = [
     status: 'available',
     image: null,
     postedAt: '2025-07-25T14:30:00',
-    category: 'Main Course'
+    category: 'Main Course',
+    coordinates: [13.0827, 80.2707]
   },
   {
     id: 2,
@@ -50,7 +103,8 @@ const mockFoodItems = [
     image: null,
     postedAt: '2025-07-25T16:15:00',
     claimedBy: 'Hope Foundation',
-    category: 'Bakery'
+    category: 'Bakery',
+    coordinates: [13.0418, 80.2341]
   },
   {
     id: 3,
@@ -66,15 +120,121 @@ const mockFoodItems = [
     status: 'available',
     image: null,
     postedAt: '2025-07-25T15:45:00',
-    category: 'Main Course'
+    category: 'Main Course',
+    coordinates: [12.9755, 80.2210]
   }
 ];
 
-export default function FoodLog() {
-  const [userRole, setUserRole] = useState<'Restaurant/Hotel' | 'NGO'>('Restaurant/Hotel'); // Mock user role
-  const [showPostForm, setShowPostForm] = useState(false);
-  const [foodItems, setFoodItems] = useState(mockFoodItems);
-  const [filters, setFilters] = useState({
+
+
+// Map component for location selection
+const LocationPicker: React.FC<LocationPickerProps> = ({ onLocationSelect, initialLocation = null }) => {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMapRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const [selectedLocation, setSelectedLocation] = useState<[number, number] | null>(initialLocation);
+
+  useEffect(() => {
+    // Load Leaflet CSS and JS
+    const loadLeaflet = async (): Promise<void> => {
+      if (typeof window === 'undefined') return;
+
+      // Load CSS
+      if (!document.querySelector('link[href*="leaflet.css"]')) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css';
+        document.head.appendChild(link);
+      }
+
+      // Load JS
+      if (!window.L) {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js';
+        script.onload = initializeMap;
+        document.head.appendChild(script);
+      } else {
+        initializeMap();
+      }
+    };
+
+    const initializeMap = (): void => {
+      if (!mapRef.current || leafletMapRef.current) return;
+
+      // Default to Chennai coordinates
+      const defaultLat = initialLocation?.[0] || 13.0827;
+      const defaultLng = initialLocation?.[1] || 80.2707;
+
+      // Initialize map
+      leafletMapRef.current = window.L.map(mapRef.current).setView([defaultLat, defaultLng], 13);
+
+      // Add tile layer
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(leafletMapRef.current);
+
+      // Add initial marker if location provided
+      if (initialLocation) {
+        markerRef.current = window.L.marker([defaultLat, defaultLng])
+          .addTo(leafletMapRef.current);
+      }
+
+      // Handle map clicks
+      leafletMapRef.current.on('click', (e: any) => {
+        const { lat, lng } = e.latlng;
+        
+        // Remove existing marker
+        if (markerRef.current) {
+          leafletMapRef.current.removeLayer(markerRef.current);
+        }
+
+        // Add new marker
+        markerRef.current = window.L.marker([lat, lng])
+          .addTo(leafletMapRef.current);
+
+        const newLocation: [number, number] = [lat, lng];
+        setSelectedLocation(newLocation);
+        
+        // Get address from coordinates (reverse geocoding)
+        fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
+          .then(response => response.json())
+          .then(data => {
+            const address = data.display_name || `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+            onLocationSelect(newLocation, address);
+          })
+          .catch(() => {
+            onLocationSelect(newLocation, `${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+          });
+      });
+    };
+
+    loadLeaflet();
+
+    return () => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.remove();
+        leafletMapRef.current = null;
+      }
+    };
+  }, [initialLocation, onLocationSelect]);
+
+  return (
+    <div className="space-y-3">
+      <div className="h-64 w-full border border-gray-300 rounded-lg overflow-hidden">
+        <div ref={mapRef} className="h-full w-full"></div>
+      </div>
+      <p className="text-sm text-gray-600">
+        Click on the map to select your restaurant's location
+      </p>
+    </div>
+  );
+};
+
+const FoodLog: React.FC = () => {
+  const [userRole, setUserRole] = useState<'Restaurant/Hotel' | 'NGO'>('Restaurant/Hotel');
+  const [showPostForm, setShowPostForm] = useState<boolean>(false);
+  const [foodItems, setFoodItems] = useState<FoodItem[]>(mockFoodItems);
+  const [filters, setFilters] = useState<Filters>({
     search: '',
     foodType: 'all',
     status: 'all',
@@ -82,7 +242,7 @@ export default function FoodLog() {
   });
 
   // Form state for posting food
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     title: '',
     description: '',
     quantity: '',
@@ -91,11 +251,12 @@ export default function FoodLog() {
     category: 'Main Course',
     expiryTime: '',
     location: '',
-    contact: ''
+    contact: '',
+    coordinates: null
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  const validateForm = () => {
+  const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
     
     if (!formData.title.trim()) errors.title = 'Title is required';
@@ -104,21 +265,42 @@ export default function FoodLog() {
     if (!formData.expiryTime) errors.expiryTime = 'Expiry time is required';
     if (!formData.location.trim()) errors.location = 'Location is required';
     if (!formData.contact.trim()) errors.contact = 'Contact is required';
+    if (!formData.coordinates) errors.coordinates = 'Please select location on map';
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleLocationSelect = (coordinates: [number, number], address: string): void => {
+    setFormData(prev => ({
+      ...prev,
+      coordinates: coordinates,
+      location: address
+    }));
+    // Clear location error if it exists
+    if (formErrors.coordinates) {
+      setFormErrors(prev => ({ ...prev, coordinates: '' }));
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>): void => {
     e.preventDefault();
     if (!validateForm()) return;
 
-    const newItem = {
+    const newItem: FoodItem = {
       id: Date.now(),
-      ...formData,
+      title: formData.title,
+      description: formData.description,
       quantity: parseInt(formData.quantity),
-      postedBy: 'Your Restaurant', // This would come from user context
-      status: 'available' as const,
+      unit: formData.unit,
+      foodType: formData.foodType,
+      category: formData.category,
+      expiryTime: formData.expiryTime,
+      location: formData.location,
+      contact: formData.contact,
+      coordinates: formData.coordinates!,
+      postedBy: 'Your Restaurant',
+      status: 'available',
       image: null,
       postedAt: new Date().toISOString()
     };
@@ -133,13 +315,14 @@ export default function FoodLog() {
       category: 'Main Course',
       expiryTime: '',
       location: '',
-      contact: ''
+      contact: '',
+      coordinates: null
     });
     setShowPostForm(false);
     alert('Food item posted successfully!');
   };
 
-  const handleClaim = (itemId: number) => {
+  const handleClaim = (itemId: number): void => {
     setFoodItems(prev => prev.map(item => 
       item.id === itemId 
         ? { ...item, status: 'claimed' as const, claimedBy: 'Your NGO' }
@@ -159,7 +342,7 @@ export default function FoodLog() {
     return matchesSearch && matchesFoodType && matchesStatus && matchesCategory;
   });
 
-  const getTimeRemaining = (expiryTime: string) => {
+  const getTimeRemaining = (expiryTime: string): string => {
     const now = new Date();
     const expiry = new Date(expiryTime);
     const diff = expiry.getTime() - now.getTime();
@@ -173,7 +356,7 @@ export default function FoodLog() {
     return `${minutes}m left`;
   };
 
-  const getStatusColor = (status: string) => {
+  const getStatusColor = (status: string): string => {
     switch (status) {
       case 'available': return 'text-green-600 bg-green-100';
       case 'claimed': return 'text-blue-600 bg-blue-100';
@@ -193,7 +376,7 @@ export default function FoodLog() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
+      <Navbar></Navbar>
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
@@ -374,7 +557,7 @@ export default function FoodLog() {
                     </div>
                     <div className="flex items-center space-x-2">
                       <MapPin className="h-4 w-4" />
-                      <span>{item.location}</span>
+                      <span className="truncate">{item.location}</span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Phone className="h-4 w-4" />
@@ -418,7 +601,7 @@ export default function FoodLog() {
       {/* Post Food Modal */}
       {showPostForm && userRole === 'Restaurant/Hotel' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Post Surplus Food</h2>
@@ -431,156 +614,186 @@ export default function FoodLog() {
               </div>
               
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Title */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Food Title <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.title}
-                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
-                      formErrors.title ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="e.g., Fresh Vegetable Curry & Rice"
-                  />
-                  {formErrors.title && <p className="mt-1 text-sm text-red-600">{formErrors.title}</p>}
-                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  {/* Left Column - Form Fields */}
+                  <div className="space-y-6">
+                    {/* Title */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Food Title <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.title}
+                        onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
+                          formErrors.title ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="e.g., Fresh Vegetable Curry & Rice"
+                      />
+                      {formErrors.title && <p className="mt-1 text-sm text-red-600">{formErrors.title}</p>}
+                    </div>
 
-                {/* Description */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Description <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    rows={3}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
-                      formErrors.description ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Describe the food, preparation method, and any special notes..."
-                  />
-                  {formErrors.description && <p className="mt-1 text-sm text-red-600">{formErrors.description}</p>}
-                </div>
+                    {/* Description */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Description <span className="text-red-500">*</span>
+                      </label>
+                      <textarea
+                        value={formData.description}
+                        onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                        rows={3}
+                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
+                          formErrors.description ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Describe the food, preparation method, and any special notes..."
+                      />
+                      {formErrors.description && <p className="mt-1 text-sm text-red-600">{formErrors.description}</p>}
+                    </div>
 
-                {/* Quantity and Unit */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Quantity <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={formData.quantity}
-                      onChange={(e) => setFormData(prev => ({ ...prev, quantity: e.target.value }))}
-                      className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
-                        formErrors.quantity ? 'border-red-500' : 'border-gray-300'
-                      }`}
-                      placeholder="50"
-                    />
-                    {formErrors.quantity && <p className="mt-1 text-sm text-red-600">{formErrors.quantity}</p>}
+                    {/* Quantity and Unit */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Quantity <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={formData.quantity}
+                          onChange={(e) => setFormData(prev => ({ ...prev, quantity: e.target.value }))}
+                          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
+                            formErrors.quantity ? 'border-red-500' : 'border-gray-300'
+                          }`}
+                          placeholder="50"
+                        />
+                        {formErrors.quantity && <p className="mt-1 text-sm text-red-600">{formErrors.quantity}</p>}
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Unit</label>
+                        <select
+                          value={formData.unit}
+                          onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        >
+                          <option value="servings">Servings</option>
+                          <option value="pieces">Pieces</option>
+                          <option value="kg">Kilograms</option>
+                          <option value="liters">Liters</option>
+                          <option value="plates">Plates</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Food Type and Category */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Food Type</label>
+                        <select
+                          value={formData.foodType}
+                          onChange={(e) => setFormData(prev => ({ ...prev, foodType: e.target.value as 'Vegetarian' | 'Non-Vegetarian' | 'Vegan' }))}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        >
+                          <option value="Vegetarian">Vegetarian</option>
+                          <option value="Non-Vegetarian">Non-Vegetarian</option>
+                          <option value="Vegan">Vegan</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                        <select
+                          value={formData.category}
+                          onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        >
+                          <option value="Main Course">Main Course</option>
+                          <option value="Bakery">Bakery</option>
+                          <option value="Desserts">Desserts</option>
+                          <option value="Beverages">Beverages</option>
+                          <option value="Snacks">Snacks</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Expiry Time */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Available Until <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={formData.expiryTime}
+                        onChange={(e) => setFormData(prev => ({ ...prev, expiryTime: e.target.value }))}
+                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
+                          formErrors.expiryTime ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                      />
+                      {formErrors.expiryTime && <p className="mt-1 text-sm text-red-600">{formErrors.expiryTime}</p>}
+                    </div>
+
+                    {/* Contact */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Contact Number <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        value={formData.contact}
+                        onChange={(e) => setFormData(prev => ({ ...prev, contact: e.target.value }))}
+                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
+                          formErrors.contact ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="+91 9876543210"
+                      />
+                      {formErrors.contact && <p className="mt-1 text-sm text-red-600">{formErrors.contact}</p>}
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Unit</label>
-                    <select
-                      value={formData.unit}
-                      onChange={(e) => setFormData(prev => ({ ...prev, unit: e.target.value }))}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    >
-                      <option value="servings">Servings</option>
-                      <option value="pieces">Pieces</option>
-                      <option value="kg">Kilograms</option>
-                      <option value="liters">Liters</option>
-                      <option value="plates">Plates</option>
-                    </select>
+
+                  {/* Right Column - Location Selection */}
+                  <div className="space-y-6">
+                    {/* Location Input */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Pickup Location <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.location}
+                        onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
+                        className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
+                          formErrors.location ? 'border-red-500' : 'border-gray-300'
+                        }`}
+                        placeholder="Address will be filled automatically when you select on map"
+                        readOnly
+                      />
+                      {formErrors.location && <p className="mt-1 text-sm text-red-600">{formErrors.location}</p>}
+                    </div>
+
+                    {/* Map Component */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Select Location on Map <span className="text-red-500">*</span>
+                      </label>
+                      <LocationPicker 
+                        onLocationSelect={handleLocationSelect}
+                        initialLocation={formData.coordinates}
+                      />
+                      {formErrors.coordinates && <p className="mt-1 text-sm text-red-600">{formErrors.coordinates}</p>}
+                    </div>
+
+                    {/* Selected Coordinates Display */}
+                    {formData.coordinates && (
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                        <p className="text-green-700 text-sm font-medium">
+                          Selected Coordinates: {formData.coordinates[0].toFixed(6)}, {formData.coordinates[1].toFixed(6)}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                </div>
-
-                {/* Food Type and Category */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Food Type</label>
-                    <select
-                      value={formData.foodType}
-                      onChange={(e) => setFormData(prev => ({ ...prev, foodType: e.target.value }))}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    >
-                      <option value="Vegetarian">Vegetarian</option>
-                      <option value="Non-Vegetarian">Non-Vegetarian</option>
-                      <option value="Vegan">Vegan</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
-                    <select
-                      value={formData.category}
-                      onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                    >
-                      <option value="Main Course">Main Course</option>
-                      <option value="Bakery">Bakery</option>
-                      <option value="Desserts">Desserts</option>
-                      <option value="Beverages">Beverages</option>
-                      <option value="Snacks">Snacks</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* Expiry Time */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Available Until <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={formData.expiryTime}
-                    onChange={(e) => setFormData(prev => ({ ...prev, expiryTime: e.target.value }))}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
-                      formErrors.expiryTime ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  />
-                  {formErrors.expiryTime && <p className="mt-1 text-sm text-red-600">{formErrors.expiryTime}</p>}
-                </div>
-
-                {/* Location */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Pickup Location <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.location}
-                    onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
-                      formErrors.location ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="Full address with landmarks"
-                  />
-                  {formErrors.location && <p className="mt-1 text-sm text-red-600">{formErrors.location}</p>}
-                </div>
-
-                {/* Contact */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Contact Number <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.contact}
-                    onChange={(e) => setFormData(prev => ({ ...prev, contact: e.target.value }))}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 ${
-                      formErrors.contact ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                    placeholder="+91 9876543210"
-                  />
-                  {formErrors.contact && <p className="mt-1 text-sm text-red-600">{formErrors.contact}</p>}
                 </div>
 
                 {/* Submit Button */}
-                <div className="flex space-x-4 pt-4">
+                <div className="flex space-x-4 pt-6 border-t">
                   <button
                     type="button"
                     onClick={() => setShowPostForm(false)}
@@ -602,4 +815,6 @@ export default function FoodLog() {
       )}
     </div>
   );
-}
+};
+
+export default FoodLog;

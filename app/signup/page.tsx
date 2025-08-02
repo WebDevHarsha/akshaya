@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff, Mail, Lock, Utensils, User } from 'lucide-react';
+import { useCreateUserWithEmailAndPassword } from 'react-firebase-hooks/auth';
+import { auth } from '@/app/firebase/config';
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -15,6 +17,9 @@ export default function Signup() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Firebase hook
+  const [createUserWithEmailAndPassword, user, loading, error] = useCreateUserWithEmailAndPassword(auth);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -53,12 +58,32 @@ export default function Signup() {
 
     setIsSubmitting(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      console.log('Signup submitted:', formData);
-      alert('Account created successfully! (This is just a demo)');
+    try {
+      const res = await createUserWithEmailAndPassword(formData.email, formData.password);
+      console.log({ res });
+      
+      if (res?.user) {
+        // Store user info and role in sessionStorage
+        sessionStorage.setItem('user', 'true');
+        sessionStorage.setItem('userRole', formData.role);
+        sessionStorage.setItem('userEmail', formData.email);
+        
+        alert('Account created successfully!');
+        
+        // Reset form
+        setFormData({
+          email: '',
+          password: '',
+          confirmPassword: '',
+          role: 'NGO'
+        });
+      }
+    } catch (e) {
+      console.error('Signup error:', e);
+      setErrors({ submit: 'Failed to create account. Please try again.' });
+    } finally {
       setIsSubmitting(false);
-    }, 1500);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -69,7 +94,15 @@ export default function Signup() {
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
+    
+    // Clear Firebase error when user makes changes
+    if (error) {
+      setErrors(prev => ({ ...prev, submit: '' }));
+    }
   };
+
+  // Display Firebase error if exists
+  const displayError = error?.message || errors.submit;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -89,6 +122,20 @@ export default function Signup() {
         {/* Signup Form */}
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Firebase Error Display */}
+            {displayError && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
+                {displayError}
+              </div>
+            )}
+
+            {/* Success Message */}
+            {user && (
+              <div className="bg-green-50 border border-green-200 text-green-600 px-4 py-3 rounded-lg text-sm">
+                Account created successfully! Welcome to Akshaya.
+              </div>
+            )}
+
             {/* Role Selector */}
             <div>
               <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
@@ -241,10 +288,10 @@ export default function Signup() {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || loading}
               className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? 'Creating Account...' : 'Create Account'}
+              {isSubmitting || loading ? 'Creating Account...' : 'Create Account'}
             </button>
 
             {/* Login Link */}

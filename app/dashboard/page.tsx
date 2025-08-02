@@ -1,5 +1,9 @@
 "use client"
 import { useState } from 'react';
+import { useAuthState } from 'react-firebase-hooks/auth';
+import { auth } from '@/app/firebase/config';
+import { useRouter } from 'next/navigation';
+import { signOut } from 'firebase/auth';
 import { 
   Bell, 
   Plus, 
@@ -23,10 +27,30 @@ import {
 } from 'lucide-react';
 
 export default function Dashboard() {
+  const [user] = useAuthState(auth);
+  const router = useRouter();
+  const userSession = sessionStorage.getItem('user');
+
+  // Redirect to sign-up if not authenticated
+  if (!user && !userSession) {
+    router.push('/sign-up');
+    return null;
+  }
+
   const [userRole, setUserRole] = useState<'Restaurant/Hotel' | 'NGO'>('Restaurant/Hotel');
   const [notifications, setNotifications] = useState(5);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      sessionStorage.removeItem('user');
+      router.push('/sign-up');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   // Mock data - in real app this would come from API
   const restaurantData = {
@@ -159,7 +183,7 @@ export default function Dashboard() {
                 {showProfile && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                     <div className="p-3 border-b border-gray-200">
-                      <p className="font-medium text-gray-900">John Doe</p>
+                      <p className="font-medium text-gray-900">{user?.displayName || user?.email || 'User'}</p>
                       <p className="text-sm text-gray-500">{userRole}</p>
                     </div>
                     <div className="py-1">
@@ -167,7 +191,10 @@ export default function Dashboard() {
                         <Settings className="h-4 w-4" />
                         <span>Settings</span>
                       </button>
-                      <button className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2">
+                      <button 
+                        onClick={handleLogout}
+                        className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-100 flex items-center space-x-2"
+                      >
                         <LogOut className="h-4 w-4" />
                         <span>Logout</span>
                       </button>

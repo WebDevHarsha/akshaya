@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Eye, EyeOff, Mail, Lock, Utensils } from 'lucide-react';
+import { useSignInWithEmailAndPassword } from 'react-firebase-hooks/auth';
+import { auth } from '@/app/firebase/config';
+import { useRouter } from 'next/navigation';
 
 export default function Login() {
   const [formData, setFormData] = useState({
@@ -13,6 +16,10 @@ export default function Login() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Firebase hooks
+  const [signInWithEmailAndPassword,, loading, error] = useSignInWithEmailAndPassword(auth);
+  const router = useRouter();
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
@@ -40,20 +47,69 @@ export default function Login() {
 
     setIsSubmitting(true);
     
-    setTimeout(() => {
-      console.log('Login submitted:', formData);
-      alert('Login successful! (This is just a demo)');
+    try {
+      const res = await signInWithEmailAndPassword(formData.email, formData.password);
+      
+      if (res) {
+        console.log('Login successful:', { user: res.user, role: formData.role });
+        
+        // Store user session and role
+        sessionStorage.setItem('user', 'true');
+        sessionStorage.setItem('userRole', formData.role);
+        sessionStorage.setItem('userEmail', formData.email);
+        
+        // Clear form
+        setFormData({
+          email: '',
+          password: '',
+          role: 'NGO'
+        });
+        
+        // Redirect to dashboard
+        router.push('/');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setErrors({ general: 'Login failed. Please try again.' });
+    } finally {
       setIsSubmitting(false);
-    }, 1000);
+    }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     
+    // Clear field-specific errors
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
+    
+    // Clear general error when user starts typing
+    if (errors.general) {
+      setErrors(prev => ({ ...prev, general: '' }));
+    }
+  };
+
+  // Display Firebase authentication errors
+  const getErrorMessage = () => {
+    if (error) {
+      switch (error.code) {
+        case 'auth/user-not-found':
+          return 'No account found with this email address.';
+        case 'auth/wrong-password':
+          return 'Incorrect password. Please try again.';
+        case 'auth/invalid-email':
+          return 'Invalid email address format.';
+        case 'auth/user-disabled':
+          return 'This account has been disabled.';
+        case 'auth/too-many-requests':
+          return 'Too many failed attempts. Please try again later.';
+        default:
+          return 'Authentication failed. Please try again.';
+      }
+    }
+    return errors.general;
   };
 
   return (
@@ -74,6 +130,13 @@ export default function Login() {
         {/* Login Form */}
         <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* General Error Message */}
+            {(error || errors.general) && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm text-red-600">{getErrorMessage()}</p>
+              </div>
+            )}
+
             {/* Role Selector */}
             <div>
               <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
@@ -174,10 +237,10 @@ export default function Login() {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || loading}
               className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? 'Signing in...' : 'Sign In'}
+              {isSubmitting || loading ? 'Signing in...' : 'Sign In'}
             </button>
 
             {/* Signup Link */}
@@ -203,3 +266,5 @@ export default function Login() {
     </div>
   );
 }
+
+
