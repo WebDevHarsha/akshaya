@@ -1,6 +1,7 @@
 "use client"
 import { useState } from 'react';
 import { Utensils, Menu, X, Heart, Soup, PersonStanding, Phone, LogOut, User } from 'lucide-react';
+import Link from 'next/link';
 
 export default function Navbar() {
   // Mock auth state for demonstration - replace with actual Firebase hooks
@@ -42,7 +43,7 @@ export default function Navbar() {
         <div className="flex justify-between items-center h-16">
           {/* Logo and Brand */}
           <div className="flex items-center space-x-3">
-            <a href="/" className="flex items-center space-x-3 group">
+            <Link href="/" className="flex items-center space-x-3 group">
               <div className="bg-green-600 p-2 rounded-full group-hover:bg-green-700 transition-colors">
                 <Utensils className="h-6 w-6 text-white" />
               </div>
@@ -50,7 +51,7 @@ export default function Navbar() {
                 <h1 className="text-xl font-bold text-gray-900">Akshaya</h1>
                 <p className="text-xs text-green-600 hidden sm:block">Feeding Hope, Not Landfills</p>
               </div>
-            </a>
+            </Link>
           </div>
 
           {/* Desktop Navigation */}
@@ -76,9 +77,11 @@ export default function Navbar() {
                   <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
                     <User className="h-5 w-5 text-white" />
                   </div>
-                  <span className="text-sm text-gray-700">
+                  <Link href="/dashboard">
+                    <span className="text-sm text-gray-700">
                     {user?.displayName || user?.email || 'User'}
                   </span>
+                  </Link>
                 </div>
                 <button
                   onClick={handleLogout}

@@ -224,7 +224,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onLocationSelect, initi
         <div ref={mapRef} className="h-full w-full"></div>
       </div>
       <p className="text-sm text-gray-600">
-        Click on the map to select your restaurant's location
+        Click on the map to select your restaurant&apos;s location
       </p>
     </div>
   );
